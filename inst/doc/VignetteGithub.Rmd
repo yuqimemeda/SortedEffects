@@ -1,0 +1,164 @@
+---
+title: "Sorted Effects"
+author: "Shuowen Chen"
+date: "`r Sys.Date()`"
+output: html_document
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+The R package **SortedEffects** implements econometric methods in Chernozhukov, Fernandez-Val and Luo (2018) and reports *sorted partial effects*, a collection of estimated partial effects sorted in increasing order and indexed by percentiles. In contrast to the classical average partial effect, sorted effect curves completely represent range of heterogeneous partial effects, which are common in nonlinear predictive models. The package further allows users to conduct classification analysis with sorted effects and visualize the results. You can install the current version of with:
+
+```{r, eval = FALSE}
+install.packages("devtools")
+devtools::install_github("shuowencs/SortedEffects")
+```
+
+
+This repository hosts the (commented) source code, data, and the vignette for the R Journal submission. For more theoretical details, please refer to the original paper: https://arxiv.org/abs/1512.05635.
+
+This document is structured to answer three curiosity-sparked questions:
+
+- What do you mean by (heterogeneous) partial effects and classification analysis?
+- What function commands does **SortedEffects** offer?
+- How do I use **SortedEffects** for my research? 
+
+I will use racial-based discrimination in mortgage lending as an application to illustrate the basic functionality of **SortedEffects**. For more detailed explanations of function commands, refer to the companion vignette. 
+
+## Econometrics Background
+
+Many economic inquiries reduce to the following question: holding all else (control variables) fixed, how does change in a key variable affect the outcome? Depending on the assumptions we impose, such effects have different names like treatment or marginal effects. To ease conversation we call them **partial effects**. To answer the question, economists often work with nonlinear models. In particular, consider the following two kinds of nonlinearity: nonlinearity in key variables of interest or in parameters. The first kind includes OLS and quantile regressions in which the variable of interest is interacted with control variables. The second kind includes generalized linear models like Logit and Probit. It turns out that the partial effects derived under nonlinear settings vary among obervational units. We call these different effects as **heterogenous partial effects**. 
+
+Before jumping to a concrete example, let's fix some notations. Let $Y$ denote outcome variable of interest and $X=(T, W)$ denote regressors. In particular, $T$ is the variable in interest while $W$ means control variables. We link between $Y$ and $X$ with a predictive function $g(X)$. With more assumptions $g$ can represent causal relationship, but it's not necessary for our purposes. 
+
+The economic question is: holding $W$ fixed, how do changes in $T$ affect $Y$? The mathematical expression for partial effects is 
+$$\Delta(x) = g(t_{1}, w)-g(t_{0}, w)$$
+for discrete $T$ and 
+$$\Delta(x) = \partial_{t}g(t, w)$$ 
+for $T$ being continuous. It turns out that if we work with nonlinear models, $\Delta(x)$ depends on values of $w$.  
+
+Here is a concrete probit example: $Y=\Phi(T \beta_{1}+W \beta')+\epsilon$, where $\Phi$ denotes CDF of standard normal distribution. If $T$ is continuous, then the partial effect is 
+$$\Delta(x)=\phi(T\beta_{1}+W\beta')\beta_{1}.$$ 
+It is obvious that $\Delta(x)$ depends on values of $W$. Since sample observations will have different values of $W$, $\Delta(x)$ features heterogeneity. Because $\Delta(x)$ is unobservable in data, we use econometric techniques to get an estimate $\widehat{\Delta}(x)$. However, no estimation is accurate. Therefore we need to quantify the uncertainty of estimation, and in econometrics this is called **inference**.  
+
+It turns out hard to do inference on $\widehat{\Delta}(x)$, so in applied economic work researchers often report the average partial effect 
+$$\int\widehat{\Delta}(x)d\widehat{\mu}_{x}$$
+as an alternative ($\widehat{\mu}_{x}$ denotes the empirical distribution of $x$). But by definition such reports neglect heterogeneity. 
+
+Chernozhukov, Fernandez-Val and Luo (forthcoming, *Econometrica*) provide theoretical underpinnings to conduct estimation and inference on the partial effect values at any quantile in interest. For example, if we want to know the partial effects from 2\% to 98\%, then the method will report estimate of all these effects and quantification of estimation uncertainty (confidence bands). Because the estimated partial effects are sorted in an increasing order, we call them **sorted partial effect (SPE)**.
+
+With SPE, we can classify observational units into groups based on how greatly they are affected. For example, researchers might be curious whether mostly affected observational units have different characteristics compared to peers who are least affected.    
+
+## Example 1: Racial-Based Discrimination in Mortgage Lending
+
+We use data on mortgage applications in Boston from 1990. The Federal Reserve Bank of Boston collected these data in relation
+to the Home Mortgage Disclosure Act (HMDA), which was passed to monitor minority access to the mortgage market. Providing better access to credit markets can arguably help the disadvantaged groups escape poverty traps. To access the data, type in the following command
+```{r, eval=FALSE}
+data("mortgage")
+```
+The sample includes 2380 observations corresponding to 2041 white applicants and 339 black applicants.
+
+We estimate a binary response model where the outcome variable $Y$ is an indicator for mortgage denial, the key covariate $T$ is an indicator for the applicant being black, and the controls $W$ contain financial and other characteristics of the applicant that banks take into account in the mortgage decisions. The regression formula is specified as
+```{r}
+fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec + ltv_med + ltv_high + denpmi + selfemp + single + hischl
+```
+
+We use `SPE` command to estimate SPE and APE. 
+```{r, eval=FALSE}
+ex <- SPE(fm = fm, data = mortgage, var.T = "black", method = "probit", us = c(2:98)/100, B = 200)
+```
+
+In this line of code, `var.T = "black"` tells the package that $T$ is `black`, while `us` specifies the SPE quantile index to range from 2\% to 98\%. `B` refers to the number of bootstrap for inference. For accuracy we recommend setting `B` to be 500. The result `ex` is a list containing SPE and APE with corresponding confidence bands, and for visualization we can use the `plot.SPE` command as follows:
+```{r, eval=FALSE}
+plot.SPE(SE=ex$spe, AE=ex$ape, us=c(2:98)/100, alpha=0.1, main="APE and SPE of Being Black on the prob of Mortgage Denial", sub="Probit Model", ylab="Change in Probability")
+```
+
+
+We see that the SPE ranges from 2\% to 14\% while APE is 6\%. It's clear that reporting APE masks rich heterogeneity of the partial effects. 
+
+Now that we know being black affects mortgage denial probability differently among applicants, we can ask a follow-up question: what are the average characteristics of most and least affected applicants? Such questions are referred to as **classification analysis**: first classify observational units into most/least affected groups and then study objects of interest like mean and distributions. 
+
+To conduct estimation and inference on classification analysis, we use the `u.CA` command. We first choose the characteristics in interest: Deny, Black, Debt-to-income, Expenses-to-income, Bad consumer credit, Bad mortgage credit, Credit problems, Denied mortgage insurance, Medium loan-to-house, High loan-to-house, Self employed, Single and High school grad. The corresponding specification is
+```{r, eval=FALSE}
+t <- c(rep(1, 4), 0, rep(1, 7), 0, 0, 1, 1)
+```
+Then we issue to `u.CA` command:
+```{r, eval=FALSE}
+CA <- u.CA(fm=fm, data=mortgage, var.T="black", method="probit",
+           cl=matrix(c(1,0,0,1), nrow=2), t=t, B=200)
+```
+
+The specification `cl=matrix(c(1,0,0,1), nrow=2)` means we tabulate the mean of the characteristics for two groups. The result `CA` is a list containing the estimate, standard errors and joint p-values. We can tabulate the result as follows:
+```{r, eval=FALSE}
+est <- matrix(CA$est, ncol=2)
+se <- matrix(CA$bse, ncol=2)
+Table <- matrix(0, ncol=4, nrow=13)
+Table[, 1] <- est[, 1] # Least Affected Bias-corrected estimate
+Table[, 2] <- se[, 1] # Corresponding SE
+Table[, 3] <- est[, 2] # Most affected
+Table[, 4] <- se[, 2] # Corresponding SE
+rownames(Table) <- colnames(CA$est)[1:13] # assign names to each row
+colnames(Table) <- rep(c("Estimate", "SE"), 2)
+xtable(Table)
+```
+
+We can see that the characteristics are different for these two groups. Now we test if the characteristics are different statistically significantly. 
+```{r, eval=FALSE}
+CAdiff <- u.CA(fm = fm, data = mortgage, var.T = "black", t = t,
+               method = "logit", cl = matrix(c(1,-1), nrow=2),
+               B = 200, bc = FALSE)
+# Tabulate the results
+est <- matrix(CAdiff$est, ncol = 1)
+se <- matrix(CAdiff$bse, ncol = 1)
+joint_p <- matrix(CAdiff$joint_p, ncol = 1)
+Table2 <- matrix(0, ncol = 3, nrow = 13)
+Table2[, 1] <- est
+Table2[, 2] <- se
+Table2[, 3] <- joint_p
+rownames(Table2) <- colnames(CAdiff$est) # assign names to each row
+colnames(Table2) <- c("Estimate", "SE", "JP-vals")
+xtable(Table2)
+```
+The p-values are adjusted to account for simultaneous inference on all 10 variables. 
+
+## Example 2: Gender Wage Gap: Set Inference
+Lastly we use show the functionality of \rt{u.Subpop} command. We use the CPS wage data via
+```{r, eval=FALSE}
+data(wage2015)
+```
+Consider the following regression specification
+```{r, eval=FALSE}
+<<eval=FALSE>>=
+fmla1 <- lnw ~ female* (widowed + divorced + separated + nevermarried +
+                        exp1 + exp2 + exp3 + exp4 + educ + occ2 + ind2 +
+                        mw + so + we)
+```
+We consider the OLS method and use \rt{Subpopplot} command to plot the 90\% confidence sets for the 10\% most and least affected subpopulations by weighted bootstrap and 500 repetitions. Note the two graphs essentially replicate Figure 5 as in Chernozhukov, Fern{\'a}ndez-Val and Luo (2018).
+```{r, eval=FALSE}
+set <- u.Subpop(fm = fmla1, data = wage2015, var.T = "female",
+                samp_weight = wage2015$weight, boot.type = "weighted",
+                B = 200, seed = 88)
+
+Subpopplot(varx = "exp1", vary = "lnw", data = wage2015, u = 0.1,
+           interest = "subgroup", subgroup = wage2015[, "female"]==1,
+           result = set, main = "Projections of Exp-lnw", sub = "OLS",
+           xlab = "Exp", ylab = "Log Wages")
+
+Subpopplot(varx = "exp1", vary = "ms", data = wage2015, u = 0.1,
+           interest= "subgroup", subgroup = wage2015[, "female"]==1,
+           result = set, main = "Projections of Exp-MS", sub = "OLS",
+           xlab = "Experience", ylab = "Marital Status")
+```
+
+## Acknowledgement
+
+This project would have been infeasible without guidance and helps from many sources. I thank my advisor Ivan Fernandez-Val for offering me this package-building opportunity and providing constant feedback. I thank Jean-Jacques Forneron and Katia Oleinik for coding suggestions. I thank Hadley Wickham for his two great books **Advanced R** and **R Packages**, and lastly Thomas Leeper for his inspirational R package **margins**. 
