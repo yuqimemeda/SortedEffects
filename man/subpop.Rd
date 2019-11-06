@@ -6,8 +6,8 @@
 \usage{
 subpop(fm, data, method = c("ols", "logit", "probit", "QR"),
   var_type = c("binary", "continuous", "categorical"), var, compare,
-  subgroup = NULL, samp_weight = NULL, taus = c(1:9)/10, u = 0.1,
-  alpha = 0.1, b = 500, seed = 1, parallel = c("no", "yes"),
+  subgroup = NULL, samp_weight = NULL, taus = c(5:95)/100, u = 0.1,
+  alpha = 0.1, b = 500, seed = 1, parallel = FALSE,
   ncores = detectCores(), boot_type = c("nonpar", "weighted"))
 }
 \arguments{
@@ -47,7 +47,7 @@ women SPE, then users should specify
 where n denotes sample size. Default is \code{NULL}.}
 
 \item{taus}{Indexes for quantile regression.
-Default is \code{c(1:9)/10}.}
+Default is \code{c(5:95)/100}.}
 
 \item{u}{Percentile of most and least affected. Default is set to
 be 0.1.}
@@ -60,8 +60,8 @@ Default is 0.1}
 \item{seed}{Pseudo-number generation for reproduction. Default is 1.}
 
 \item{parallel}{Whether the user wants to use parallel computation.
-The default is \code{no} and only 1 CPU will be used.
-The other option is \code{yes}, and user can specify
+The default is \code{FALSE} and only 1 CPU will be used.
+The other option is \code{TRUE}, and user can specify
 the number of CPUs in the \code{ncores} option.}
 
 \item{ncores}{Number of cores for computation. Default is set to be
@@ -79,16 +79,23 @@ implements weighted bootstrap.}
 \code{subpop} conducts set inference on the groups of most and least
 affected. When \code{subgroup = NULL}, output is for whole sample. Otherwise
 the results are subgroup. The output of \code{subpop} is a list
-containing five components: \code{most}, \code{least}, \code{u} and
-\code{sub}. As the names indicate, \code{most} and \code{least}
-denote the confidence sets for the most and least affected units. \code{u}
-stores the u-th most and least affected index, and \code{sub} stores the
-indicators for subpopulations. The results can be visualized using the
-\code{\link{plot.subpop}} command.
+containing six components: \code{cs_most}, \code{cs_least}, \code{u},
+\code{subgroup}, \code{most} and \code{least}. As the names
+indicate, \code{cs_most} and \code{cs_least} denote the confidence sets for
+the most and least affected units. \code{u} stores the u-th most and least
+affected index. \code{subgroup} stores the indicators for subpopulations.
+\code{most} and \code{least} store the data of the most and
+least affected groups. The confidence sets can be visualized using the
+\code{\link{plot.subpop}} command while the two groups can be tabulated via
+the \code{\link{summary.subpop}} command.
 }
 \examples{
 data("mortgage")
-fm <- deny ~ black + p_irat + hse_inc
-result <- subpop(fm = fm, data = mortgage, var = "black", method = "logit")
+### Regression Specification
+fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec +
+   ltv_med + ltv_high + denpmi + selfemp + single + hischl
+### Issue the subpop command
+set_b <- subpop(fm, data = mortgage, method = "logit", var = "black",
+u = 0.1, alpha = 0.1, b = 50)
 
 }

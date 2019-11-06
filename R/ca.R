@@ -3,7 +3,9 @@
 #' \code{ca} conducts CA estimation and inference on user-specified objects of
 #' interest: first (weighted) moment or (weighted) distribution. Users can use
 #' \code{t} to specify variables in interest. When object of interest is
-#' moment, use \code{cl} to specify linear combinations for hypothesis testing.
+#' moment, use \code{cl} to specify whether want to see averages or difference
+#' of the two groups.
+#'
 #' All estimates are bias-corrected and all confidence bands are monotonized.
 #' The bootstrap procedures follow algorithm 2.2 as in Chernozhukov,
 #' Fernandez-Val and Luo (2018).
@@ -17,13 +19,14 @@
 #'   \item \code{bse} Bootstrap standard errors.
 #'   \item \code{joint_p} P-values that are adjusted for multiplicity to
 #'   account for joint testing for all variables.
+#'   \item \code{pointwise_p} P-values that doesn't adjust for join testing
 #' }
 #' If users have further specified \code{cat} (e.g., \code{!is.null(cat)}), the
-#' output has a fourth component
-#' \itemize{
-#'   \item \code{p_cat} P-values that are adjusted for multiplicity to account
-#'   for joint testing for all variables within a category.
-#' }
+#' fourth component will be replaced with \code{p_cat}: P-values that are a
+#' djusted for multiplicity to account for joint testing for all variables
+#' within a category. Users can use \code{\link{summary.ca}} to tabulate the
+#' results.
+#'
 #' When \code{interest = "dist"}, the output is a list of two components:
 #' \itemize{
 #'   \item \code{infresults} A list that stores estimates, upper and lower
@@ -32,7 +35,7 @@
 #'   \item \code{sortvar} A list that stores sorted and unique variables in
 #'   interest.
 #' }
-#' We recommend using \code{\link{plot}} command for result visualization.
+#' We recommend using \code{\link{plot.ca}} command for result visualization.
 #'
 #' @param fm          Regression formula
 #' @param data        The data in use: full sample or subpopulation in interset
@@ -62,7 +65,7 @@
 #' @param samp_weight Sampling weight of data. Input should be a n by 1 vector,
 #'                    where n denotes sample size. Default is \code{NULL}.
 #' @param taus        Indexes for quantile regression. Default is
-#'                    \code{c(1:9)/10}.
+#'                    \code{c(5:95)/100}.
 #' @param u           Percentile of most and least affected. Default is set to
 #'                    be 0.1.
 #' @param interest    Generic objects in the least and most affected
@@ -78,7 +81,7 @@
 #'                    default is \code{"both"}, which shows the variables of
 #'                    the two groups; the alternative is \code{"diff"}, which
 #'                    shows the difference of the two groups. The user can
-#'                    use the \code{\link{summary.camoment}} to tabulate the
+#'                    use the \code{\link{summary.ca}} to tabulate the
 #'                    results, which also contain the standard errors and p-
 #'                    values. If \code{interest = "dist"}, this option doesn't
 #'                    have any bearing and user can leave it to be the default
@@ -92,19 +95,18 @@
 #' @param cat         P-values in classification analysis are adjusted for
 #'                    multiplicity to account for joint testing of zero
 #'                    coefficients on for all variables within a category.
-#'                    Specify all variables in interest in a list using numbers
-#'                    to denote relative positions. For example, if variables
-#'                    in interest are "educ", "male", "female", "low income",
-#'                    "middle income", and "high income", cat should be
-#'                    specified as \code{cat = list(a="educ", b=c("male",
-#'                    "female"), c=c("low income", "middle income",
-#'                    "high income"))}. Default is \code{NULL}.
+#'                    Suppose we have selected specified 3 variables in
+#'                    interest: \code{t = c("a", "b", "c")}. Without loss of
+#'                    generality, assume \code{"a"} is not a factor, while
+#'                    \code{"b"} and \code{"c"} are two factors. Then users
+#'                    need to specify as \code{cat = c("b", "c")}. Default is
+#'                    \code{NULL}.
 #' @param alpha       Size for confidence interval. Shoule be between 0 and 1.
 #'                    Default is 0.1
 #' @param b           Number of bootstrap draws. Default is 500.
 #' @param parallel    Whether the user wants to use parallel computation.
-#'                    The default is \code{no} and only 1 CPU will be used.
-#'                    The other option is \code{yes}, and user can specify
+#'                    The default is \code{FALSE} and only 1 CPU will be used.
+#'                    The other option is \code{TRUE}, and user can specify
 #'                    the number of CPUs in the \code{ncores} option.
 #' @param ncores      Number of cores for computation. Default is set to be
 #'                    \code{detectCores()}, which is a function from package
@@ -121,10 +123,7 @@
 #'                    observations, and thus users can provide a Sort value and
 #'                    the package will sort and unique based on the weighted
 #'                    quantile of Sort. If users don't want this feature, set
-#'                    \code{range_cb = NULL}. Default is
-#'                    \code{c(0.5:99.5)/100}. To see how \code{range_cb} makes
-#'                    a difference in the plot, refer to the examples in the
-#'                    companion vignette.
+#'                    \code{range_cb = NULL}. Default is \code{c(1:99)/100}.
 #' @param boot_type   Type of bootstrap. Default is \code{"nonpar"}, and the
 #'                    package implements nonparametric bootstrap. The
 #'                    alternative is \code{"weighted"}, and the package
@@ -132,25 +131,29 @@
 #'
 #' @examples
 #' data("mortgage")
-#' fm <- deny ~ black + p_irat
-#' t <- c(rep(1, 2), rep(0, 14)) # Specify variables in interest
-#' CA <- ca(fm = fm, data = mortgage, var = "black", method = "logit", b=10,
-#' t = t)
-#'
-#'
+#' ### Regression Specification
+#' fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec +
+#' ltv_med + ltv_high + denpmi + selfemp + single + hischl
+#' ### Specify characteristics of interest
+#' t <- c("deny", "p_irat", "black", "hse_inc", "ccred", "mcred", "pubrec",
+#' "denpmi", "selfemp", "single", "hischl", "ltv_med", "ltv_high")
+#' ### issue ca command
+#' CA <- ca(fm = fm, data = mortgage, var = "black", method = "logit",
+#' cl = "diff", t = t, b = 50, bc = TRUE)
 #' @importFrom boot boot
 #' @importFrom rlist list.cbind
 #' @importFrom Hmisc wtd.quantile wtd.mean
 #' @importFrom stats quantile rexp qnorm pnorm
+#' @importFrom dummies dummy.data.frame
 #' @export
 ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
                var_type = c("binary", "continuous", "categorical"), var,
-               compare, subgroup = NULL, samp_weight = NULL, taus = c(1:9)/10,
+               compare, subgroup = NULL, samp_weight = NULL, taus = c(5:95)/100,
                u = 0.1, interest = c("moment", "dist"),
                t = c(1, 1, rep(0, dim(data)[2] - 2)), cl = c("both", "diff"),
-               cat = NULL, alpha = 0.1, b = 500, parallel = c("no", "yes"),
+               cat = NULL, alpha = 0.1, b = 500, parallel = FALSE,
                ncores = detectCores(), seed = 1, bc = TRUE,
-               range_cb = c(0.5:99.5)/100, boot_type = c("nonpar", "weighted"))
+               range_cb = c(1:99)/100, boot_type = c("nonpar", "weighted"))
   {
   # ----- Stopping Conditions
   if (alpha >= 1 || alpha <= 0) stop("Please specify a correct size for
@@ -160,9 +163,6 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
   if (typeof(t) == "double" && length(t) != dim(data)[2]) {
     stop("Number of variable indicators don't match.")
   }
-  # if (!is.matrix(cl)) stop("cl must be specified as a matrix.")
-  # if (dim(cl)[1] != 2) stop("Please specify cl as a 2 by L matrix.")
-  if (!is.null(cat) && !is.list(cat)) stop("Please specify cat as a list.")
   # ----- Replace Null Weight Specification
   if (is.null(samp_weight)) samp_weight <- rep(1, dim(data)[1])
   # ----- Matching Arguments
@@ -170,82 +170,11 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
   var_type <- match.arg(var_type)
   boot_type <- match.arg(boot_type)
   interest <- match.arg(interest)
-  parallel <- match.arg(parallel)
   temp <- match.arg(cl)
   if (temp == "both") cl <- matrix(c(1, 0, 0, 1), nrow = 2)
   if (temp == "diff") cl <- matrix(c(1, -1), nrow = 2)
-  # ----- 1. Call to estimate PE
-  output <- suppressWarnings(peestimate(fm, data, samp_weight, var_type, var,
-                                        compare, method, subgroup, taus))
-  pe_est <- output$pe_est
-  # if(is.null(subgroup)) is equivalent to if(groupCA=="full")
-  # if(!is.null(subgroup)) is equivalent to if(groupCA=="subgroup")
-  # ----- 2. u-most and least Affected Groups
-  if (method != "QR") {
-    if (is.null(subgroup)) {
-      # Threshold Values for u-most/least Affected for WHOLE sample
-      effect_high <- wtd.quantile(pe_est, samp_weight, 1 - u)
-      effect_low <- wtd.quantile(pe_est, samp_weight, u)
-      # Get weight for the two groups. If weight is NULL, it does nothing
-      data$.w <- samp_weight
-      # Two affected groups
-      high_affected <- data[pe_est >= effect_high, ]
-      low_affected <- data[pe_est <= effect_low, ]
-    } else {
-      # SUB sample
-      pesub_est <- output$pesub_est
-      pesub_w <- output$samp_weight_sub
-      # Threshold Values for u-most/least Affected
-      effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
-      effect_low <- wtd.quantile(pesub_est, pesub_w, u)
-      data$.w <- samp_weight
-      subdata <- data[subgroup, ]
-      high_affected <- subdata[pesub_est >= effect_high, ]
-      low_affected <- subdata[pesub_est <= effect_low, ]
-    }
-  } # QR requires special treatment due to stacking of quantile indices
-  if (method == "QR") {
-    if (is.null(subgroup)) {
-      # This is where QR is different.
-      effect_high <- wtd.quantile(pe_est, matrix(samp_weight, ncol = 1,
-                                                 nrow = nrow(pe_est),
-                                                 byrow = FALSE), 1 - u)
-      effect_low <- wtd.quantile(pe_est, matrix(samp_weight, ncol = 1,
-                                                nrow = nrow(pe_est),
-                                                byrow = FALSE), u)
-      # Obtain sampling weight of each group
-      data$.w <- samp_weight
-      # Kronecker function doesn't work for all data types, so I wrote this
-      # alternative
-      mesh <- data[rep(1:nrow(data), times = length(taus)), ]
-      # Two Affected Groups
-      high_affected <- mesh[pe_est >= effect_high, ]
-      low_affected <- mesh[pe_est <= effect_low, ]
-    } else {# Subsample: use PEsub_est
-      pesub_est <- output$pesub_est
-      pesub_w <- output$samp_weight_sub
-      # Threshold Values for u-most/least Affected
-      effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
-      effect_low <- wtd.quantile(pesub_est, pesub_w, u)
-      data$.w <- samp_weight
-      subdata <- data[subgroup, ]
-      mesh <- subdata[rep(1:nrow(subdata), times = length(taus)), ]
-      # Two Affected Groups
-      high_affected <- mesh[pesub_est >= effect_high, ]
-      low_affected <- mesh[pesub_est <= effect_low, ]
-    }
-  }
-  # Obtain the sampling weight for each group (If samp_weight = NULL, then
-  # these two vars are NULL)
-  weight_high <- high_affected$.w
-  weight_low <- low_affected$.w
-  # Remove the .w
-  high_affected$.w <- NULL
-  low_affected$.w <- NULL
-  data$.w <- NULL
-  ##### Classicification Analysis Starts Here #####
-  # ----------------------------  3. Index Configuration -----------------------------
-  # if t is variable names, convert to index
+  # ---- Index Configuration
+  # t is variable names, convert to index
   if (typeof(t) == "character") {
     posit <- match(t, colnames(data))
     ind <- rep(0, dim(data)[2])
@@ -263,16 +192,145 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
   if (is.null(m)) m <- 1
   # Extract Names of variables
   vars <- colnames(data)[which(prod != 0)]
-  # ----- 4. Specify object of interest
+  # ----- Auxiliary function
+  # The following function creates a dummy matrix for inputted factors
+  subsetting <- function(data, vars) {
+    # check if the inputted variable is a factor
+    if (length(vars) == 1) {
+      temp <- matrix(is.factor(data[, vars]))
+    } else {
+      temp <- matrix(sapply(data[, vars], is.factor), nrow = 1)
+    }
+    colnames(temp) <- vars
+    if (length(which(temp)) == 0) {
+      # this means there is no factor inputs
+      # then it just subset characteristics of interest
+      dat <- data[, vars]
+    } else {
+      # there is at least one factor input
+      # create dummy matrix for inputted factors
+      dummydata <- dummy.data.frame(data, names = colnames(temp)[which(temp)],
+                                    sep = "_", all = FALSE)
+      # create
+      otherdata <- data[, colnames(temp)[-which(temp)]]
+      dat <- cbind(otherdata, dummydata)
+    }
+    return(dat)
+  }
+  # ----- 1. Call to estimate PE
+  output <- suppressWarnings(peestimate(fm, data, samp_weight, var_type, var,
+                                        compare, method, subgroup, taus))
+  pe_est <- output$pe_est
+  # if(is.null(subgroup)) is equivalent to if(groupCA=="full")
+  # if(!is.null(subgroup)) is equivalent to if(groupCA=="subgroup")
+  # ----- 2. u-most and least Affected Groups
+  if (method != "QR") {
+    if (is.null(subgroup)) {
+      # Threshold Values for u-most/least Affected for WHOLE sample
+      effect_high <- wtd.quantile(pe_est, samp_weight, 1 - u)
+      effect_low <- wtd.quantile(pe_est, samp_weight, u)
+      if (interest == "moment") {
+        # subset data for interest == moment
+        mat <- subsetting(data, vars)
+        mat$.w <- samp_weight
+        high_affected <- mat[pe_est >= effect_high, ]
+        low_affected <- mat[pe_est <= effect_low, ]
+      } else if (interest == "dist") {
+        # Get weight for the two groups. If weight is NULL, it does nothing
+        data$.w <- samp_weight
+        # Two affected groups for dist purpose
+        high_affected <- data[pe_est >= effect_high, ]
+        low_affected <- data[pe_est <= effect_low, ]
+      }
+    } else {
+      # SUB sample
+      pesub_est <- output$pesub_est
+      pesub_w <- output$samp_weight_sub
+      # Threshold Values for u-most/least Affected
+      effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
+      effect_low <- wtd.quantile(pesub_est, pesub_w, u)
+      data$.w <- samp_weight
+      subdata <- data[subgroup, ]
+      if (interest == "moment") {
+        vars2 <- c(vars, ".w")
+        mat_sub <- subsetting(subdata, vars2)
+        high_affected <- mat_sub[pesub_est >= effect_high, ]
+        low_affected <- mat_sub[pesub_est <= effect_low, ]
+      } else if (interest == "dist") {
+        high_affected <- subdata[pesub_est >= effect_high, ]
+        low_affected <- subdata[pesub_est <= effect_low, ]
+      }
+    }
+  }
+  # QR requires special treatment due to stacking of quantile indices
+  if (method == "QR") {
+    if (is.null(subgroup)) {
+      # This is where QR is different.
+      effect_high <- wtd.quantile(pe_est, matrix(samp_weight, ncol = 1,
+                                                 nrow = nrow(pe_est),
+                                                 byrow = FALSE), 1 - u)
+      effect_low <- wtd.quantile(pe_est, matrix(samp_weight, ncol = 1,
+                                                nrow = nrow(pe_est),
+                                                byrow = FALSE), u)
+      if (interest == "moment") {
+        mat <- subsetting(data, vars)
+        mat$.w <- samp_weight
+        # Kronecker function doesn't work for all data types, so I wrote this
+        # alternative
+        mesh <- mat[rep(1:nrow(mat), times = length(taus)), ]
+        high_affected <- mesh[pe_est >= effect_high, ]
+        low_affected <- mesh[pe_est <= effect_low, ]
+      } else if (interest == "dist") {
+        # Obtain sampling weight of each group
+        data$.w <- samp_weight
+        mesh <- data[rep(1:nrow(data), times = length(taus)), ]
+        # Two Affected Groups
+        high_affected <- mesh[pe_est >= effect_high, ]
+        low_affected <- mesh[pe_est <= effect_low, ]
+      }
+    } else {# Subsample: use PEsub_est
+      pesub_est <- output$pesub_est
+      pesub_w <- output$samp_weight_sub
+      # Threshold Values for u-most/least Affected
+      effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
+      effect_low <- wtd.quantile(pesub_est, pesub_w, u)
+      data$.w <- samp_weight
+      subdata <- data[subgroup, ]
+      if (interest == "moment") {
+        vars2 <- c(vars, ".w")
+        mat_sub <- subsetting(subdata, vars2)
+        mesh <- mat_sub[rep(1:nrow(mat_sub), times = length(taus)), ]
+        high_affected <- mat_sub[pesub_est >= effect_high, ]
+        low_affected <- mat_sub[pesub_est <= effect_low, ]
+      } else if (interest == "dist") {
+        mesh <- subdata[rep(1:nrow(subdata), times = length(taus)), ]
+        # Two Affected Groups
+        high_affected <- mesh[pesub_est >= effect_high, ]
+        low_affected <- mesh[pesub_est <= effect_low, ]
+      }
+    }
+  }
+  # Obtain the sampling weight for each group (If samp_weight = NULL, then
+  # these two vars are NULL)
+  weight_high <- high_affected$.w
+  weight_low <- low_affected$.w
+  # Remove the .w
+  high_affected$.w <- NULL
+  low_affected$.w <- NULL
+  data$.w <- NULL
+  ##### Classicification Analysis Starts Here #####
+  # ----- 3. Specify object of interest
   if (interest == "moment") {
     # weighted mean of var in interest for the u-least/most affected groups
-    interest_high <- apply(as.matrix(high_affected[, prod]), 2, wtd.mean,
+    interest_high <- apply(as.matrix(high_affected), 2, wtd.mean,
                            weights = weight_high, na.rm = TRUE)
-    interest_low <- apply(as.matrix(low_affected[, prod]), 2, wtd.mean,
+    interest_low <- apply(as.matrix(low_affected), 2, wtd.mean,
                           weights = weight_low, na.rm = TRUE)
+    varname <- colnames(as.matrix(high_affected))
     # Average of var in interest for the two groups (m * 2), where m is number
     # of variables in interest
-    est_interest <- cbind(interest_low, interest_high)
+    est_interest <- cbind(interest_high, interest_low)
+    #est_interest <- cbind(interest_low, interest_high)
     # Hypothesis in interest (m * L matrix)
     # Component (a, b) meaning: b-th hypothesis statistics for a-th variable
     # in interest
@@ -280,11 +338,11 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     # Reshape: 1 * mL
     H <- matrix(H, nrow = 1)
     # Assign names
-    m <- length(vars)
-    colnames(H) <- rep(vars, length(H)/m)
+    m <- length(varname)
+    colnames(H) <- rep(varname, length(H)/m)
   } else if (interest == "dist") {
     # weighted CDF of var in interest for the u-least/most affected groups
-    # Sort and eliminate repetitive obs. Note the list "temp" is ragged.
+    # Sort and unique eliminate repetitive obs. Note the list "temp" is ragged.
     # temp0 will be used at the end of the function
     # Depending on whether user provides Sort
     if (is.null(range_cb)) {
@@ -334,7 +392,7 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     trimtails <- lapply(trimtails, matrix, nrow = 1)
     trimtails <- list.cbind(trimtails) # long vector of trimtail logics
   }
-  #  ----- 6. The Bootstrap Statistics Function
+  #  ----- 4. The Bootstrap Statistics Function
   # set a bootstrap counting variable for the purpose of showing a progress bar
   rep_count <- 1
   # No weight bootstrap
@@ -353,9 +411,16 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         # Threshold Values for u-most/least Affected
         effect_high <- wtd.quantile(pe_est, data$.w, 1 - u)
         effect_low <- wtd.quantile(pe_est, data$.w, u)
-        # Two affected groups
-        high_affected <- data[pe_est >= effect_high, ]
-        low_affected <- data[pe_est <= effect_low, ]
+        if (interest == "moment") {
+          mat <- subsetting(data, vars)
+          mat$.w <- data$.w
+          high_affected <- mat[pe_est >= effect_high, ]
+          low_affected <- mat[pe_est <= effect_low, ]
+        } else if (interest == "dist") {
+          # Two affected groups
+          high_affected <- data[pe_est >= effect_high, ]
+          low_affected <- data[pe_est <= effect_low, ]
+        }
       } else {
         pesub_est <- output_bs$pesub_est
         pesub_w <- output_bs$samp_weight_sub
@@ -363,8 +428,15 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
         effect_low <- wtd.quantile(pesub_est, pesub_w, u)
         subdata <- data[subgroup, ]
-        high_affected <- subdata[pesub_est >= effect_high, ]
-        low_affected <- subdata[pesub_est <= effect_low, ]
+        if (interest == "moment") {
+          vars2 <- c(vars, ".w")
+          mat_sub <- subsetting(subdata, vars2)
+          high_affected <- mat_sub[pesub_est >= effect_high, ]
+          low_affected <- mat_sub[pesub_est <= effect_low, ]
+        } else if (interest == "dist") {
+          high_affected <- subdata[pesub_est >= effect_high, ]
+          low_affected <- subdata[pesub_est <= effect_low, ]
+        }
       }
     } # QR requires special treatment due to stacking of quantile indices
     if (method == "QR") {
@@ -377,10 +449,18 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         effect_low <- wtd.quantile(pe_est, matrix(data$.w, ncol = 1,
                                                   nrow = nrow(pe_est),
                                                   byrow = FALSE), u)
-        mesh <- data[rep(1:nrow(data), times = length(taus)), ]
-        # Two Affected Groups
-        high_affected <- mesh[pe_est >= effect_high, ]
-        low_affected <- mesh[pe_est <= effect_low, ]
+        if (interest == "moment") {
+          mat <- subsetting(data, vars)
+          mat$.w <- data$.w
+          mesh <- mat[rep(1:nrow(mat), times = length(taus)), ]
+          high_affected <- mesh[pe_est >= effect_high, ]
+          low_affected <- mesh[pe_est <= effect_low, ]
+        } else if (interest == "dist") {
+          mesh <- data[rep(1:nrow(data), times = length(taus)), ]
+          # Two Affected Groups
+          high_affected <- mesh[pe_est >= effect_high, ]
+          low_affected <- mesh[pe_est <= effect_low, ]
+        }
       } else {
         pesub_est <- output_bs$pesub_est
         pesub_w <- output_bs$samp_weight_sub
@@ -389,10 +469,18 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
         effect_low <- wtd.quantile(pesub_est, pesub_w, u)
         subdata <- data[subgroup, ]
-        mesh <- subdata[rep(1:nrow(subdata), times = length(taus)), ]
-        # Two Affected Groups
-        high_affected <- mesh[pesub_est >= effect_high, ]
-        low_affected <- mesh[pesub_est <= effect_low, ]
+        if (interest == "moment") {
+          vars2 <- c(vars, ".w")
+          mat_sub <- subsetting(subdata, vars2)
+          mesh <- mat_sub[rep(1:nrow(mat_sub), times = length(taus)), ]
+          high_affected <- mesh[pesub_est >= effect_high, ]
+          low_affected <- mesh[pesub_est <= effect_low, ]
+        } else if (interest == "dist") {
+          mesh <- subdata[rep(1:nrow(subdata), times = length(taus)), ]
+          # Two Affected Groups
+          high_affected <- mesh[pesub_est >= effect_high, ]
+          low_affected <- mesh[pesub_est <= effect_low, ]
+        }
       }
     }
     # Obtain the sampling weight for each group (If samp_weight = NULL, then
@@ -405,13 +493,15 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     data$.w <- NULL
     if (interest == "moment") {
       # weighted mean of var in interest for the u-least/most affected groups
-      interest_high <- apply(as.matrix(high_affected[, prod]), 2,
-                            weighted.mean, weights = weight_high, na.rm = TRUE)
-      interest_low <- apply(as.matrix(low_affected[, prod]), 2,
-                           weighted.mean, weights = weight_low, na.rm = TRUE)
+      interest_high <- apply(as.matrix(high_affected), 2,
+                             weighted.mean, weights = weight_high, na.rm = TRUE)
+      interest_low <- apply(as.matrix(low_affected), 2,
+                            weighted.mean, weights = weight_low, na.rm = TRUE)
+      varname <- colnames(as.matrix(high_affected))
       # Average of var in interest for the two groups (m * 2), where m is
       # number of variables in interest
-      est_interest <- cbind(interest_low, interest_high)
+      est_interest <- cbind(interest_high, interest_low)
+      # est_interest <- cbind(interest_low, interest_high)
       # Hypothesis in interest (m * L matrix)
       # Component (a, b) meaning: b-th hypothesis statistics for a-th variable
       # in interest
@@ -419,7 +509,8 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
       # Reshape: 1 * mL
       H <- matrix(H, nrow = 1)
       # Assign names
-      colnames(H) <- rep(vars, length(H)/m)
+      m <- length(varname)
+      colnames(H) <- rep(varname, length(H)/m)
     }
     if (interest == "dist") {
       fun <- function(a){ # a is a name component in the list
@@ -481,9 +572,16 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         # Threshold Values for u-most/least Affected
         effect_high <- wtd.quantile(pe_est, data$.w, 1 - u)
         effect_low <- wtd.quantile(pe_est, data$.w, u)
-        # Two affected groups
-        high_affected <- data[pe_est >= effect_high, ]
-        low_affected <- data[pe_est <= effect_low, ]
+        if (interest == "moment") {
+          mat <- subsetting(data, vars)
+          mat$.w <- data$.w
+          high_affected <- mat[pe_est >= effect_high, ]
+          low_affected <- mat[pe_est <= effect_low, ]
+        } else if (interest == "dist") {
+          # Two affected groups
+          high_affected <- data[pe_est >= effect_high, ]
+          low_affected <- data[pe_est <= effect_low, ]
+        }
       } else {
         pesub_est <- output_bs$pesub_est
         pesub_w <- output_bs$samp_weight_sub
@@ -491,8 +589,15 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
         effect_low <- wtd.quantile(pesub_est, pesub_w, u)
         subdata <- data[subgroup, ]
-        high_affected <- subdata[pesub_est >= effect_high, ]
-        low_affected <- subdata[pesub_est <= effect_low, ]
+        if (interest == "moment") {
+          vars2 <- c(vars, ".w")
+          mat_sub <- subsetting(subdata, vars2)
+          high_affected <- mat_sub[pesub_est >= effect_high, ]
+          low_affected <- mat_sub[pesub_est <= effect_low, ]
+        } else if (interest == "dist") {
+          high_affected <- subdata[pesub_est >= effect_high, ]
+          low_affected <- subdata[pesub_est <= effect_low, ]
+        }
       }
     } # QR requires special treatment due to stacking of quantile indices
     if (method == "QR") {
@@ -505,10 +610,18 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         effect_low <- wtd.quantile(pe_est, matrix(data$.w, ncol = 1,
                                                   nrow = nrow(pe_est),
                                                   byrow = FALSE), u)
-        mesh <- data[rep(1:nrow(data), times = length(taus)), ]
-        # Two Affected Groups
-        high_affected <- mesh[pe_est >= effect_high, ]
-        low_affected <- mesh[pe_est <= effect_low, ]
+        if (interest == "moment") {
+          mat <- subsetting(data, vars)
+          mat$.w <- data$.w
+          mesh <- mat[rep(1:nrow(mat), times = length(taus)), ]
+          high_affected <- mesh[pe_est >= effect_high, ]
+          low_affected <- mesh[pe_est <= effect_low, ]
+        } else if (interest == "dist") {
+          mesh <- data[rep(1:nrow(data), times = length(taus)), ]
+          # Two Affected Groups
+          high_affected <- mesh[pe_est >= effect_high, ]
+          low_affected <- mesh[pe_est <= effect_low, ]
+        }
       } else {
         pesub_est <- output_bs$pesub_est
         pesub_w <- output_bs$samp_weight_sub
@@ -517,10 +630,18 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
         effect_high <- wtd.quantile(pesub_est, pesub_w, 1 - u)
         effect_low <- wtd.quantile(pesub_est, pesub_w, u)
         subdata <- data[subgroup, ]
-        mesh <- subdata[rep(1:nrow(subdata), times = length(taus)), ]
-        # Two Affected Groups
-        high_affected <- mesh[pesub_est >= effect_high, ]
-        low_affected <- mesh[pesub_est <= effect_low, ]
+        if (interest == "moment") {
+          vars2 <- c(vars, ".w")
+          mat_sub <- subsetting(data, vars2)
+          mesh <- mat_sub[rep(1:nrow(mat_sub), times = length(taus)), ]
+          high_affected <- mesh[pesub_est >= effect_high, ]
+          low_affected <- mesh[pesub_est <= effect_low, ]
+        } else if (interest == "dist") {
+          mesh <- subdata[rep(1:nrow(subdata), times = length(taus)), ]
+          # Two Affected Groups
+          high_affected <- mesh[pesub_est >= effect_high, ]
+          low_affected <- mesh[pesub_est <= effect_low, ]
+        }
       }
     }
     # Obtain the sampling weight for each group
@@ -532,13 +653,15 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     data$.w <- NULL
     if (interest == "moment") {
       # weighted mean of var in interest for the u-least/most affected groups
-      interest_high <- apply(as.matrix(high_affected[, prod]), 2, wtd.mean,
+      interest_high <- apply(as.matrix(high_affected), 2, wtd.mean,
                              weights = weight_high, na.rm = TRUE)
-      interest_low <- apply(as.matrix(low_affected[, prod]), 2, wtd.mean,
+      interest_low <- apply(as.matrix(low_affected), 2, wtd.mean,
                             weights = weight_low, na.rm = TRUE)
+      varname <- colnames(as.matrix(high_affected))
       # Average of var in interest for the two groups (m * 2), where m is
       # number of variables in interest
-      est_interest <- cbind(interest_low, interest_high)
+      est_interest <- cbind(interest_high, interest_low)
+      # est_interest <- cbind(interest_low, interest_high)
       # Hypothesis in interest (m * L matrix)
       # Component (a, b) meaning: b-th hypothesis statistics for a-th variable
       # in interest
@@ -546,7 +669,8 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
       # Reshape: 1 * mL
       H <- matrix(H, nrow = 1)
       # Assign names
-      colnames(H) <- rep(vars, length(H)/m)
+      m <- length(varname)
+      colnames(H) <- rep(varname, length(H)/m)
     }
     if (interest == "dist") {
       fun2 <- function(a, weight_high = weight_high, weight_low = weight_low){
@@ -565,9 +689,9 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     }
     out <- H
   }
-  # -----  7. Call boot for bootstrap
+  # -----  5. Call boot for bootstrap
   set.seed(seed)
-  if (parallel == "no") ncores <- 1
+  if (parallel == FALSE) ncores <- 1
   if (boot_type == "nonpar") {
     if (method != "QR") {
       # print a message showing how many cores are used
@@ -597,11 +721,11 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     closepb(pb)
     data$.w <- NULL
   }
-  # -----  8. Inference
+  # -----  6. Inference
   if (interest == "moment") {
     # draws.H is B * mL
     draws_H <- result_boot$t
-    colnames(draws_H) <- rep(vars, dim(cl)[2])
+    colnames(draws_H) <- rep(varname, dim(cl)[2])
     # Zc is B * mL
     Zc <- draws_H - matrix(H, nrow = b, ncol = length(H), byrow = TRUE)
     # sig is 1 * mL (bootstrap standard error) (Pointwise SE)
@@ -626,74 +750,123 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
     j_pvals_un <- sapply(stat_un, epvals, zs = t_tilde)
     # Now work on p-vals accounting for testing all vars within one category
     if (!is.null(cat)) {
-      # a function that does inference in each category, x is a component of list
-      cate <- function(x, Zc, H) {
-        part <- Zc[, x]
-        H_p <- H[, x]
-        if (is.null(dim(part))) {
-          si <- (quantile(part, 0.75, na.rm = TRUE) -
-                   quantile(part, 0.25, na.rm = TRUE)) / (qnorm(0.75) - qnorm(0.25))
-          H_bc_p <- 2 * H_p - mean(part, na.rm = TRUE)
-          stat_p <- abs(H_bc_p)/si
-          stat_un_p <- abs(H_p)/si
-          # bias corrected and uncorreted
-          j_pvals_p <- 1 - pnorm(stat_p)
-          j_pvals_un_p <- 1 - pnorm(stat_un_p)
-        } else {
-          sig_p <- (apply(part, 2, quantile, 0.75, na.rm = TRUE) -
-                      apply(part, 2, quantile, 0.25, na.rm = TRUE)) / (qnorm(0.75) - qnorm(0.25))
-          tilde <- apply(abs(part)/matrix(sig_p, nrow = b, ncol = length(sig_p),
-                                          byrow = TRUE), 1, max, na.rm = TRUE)
-          H_bc_p <- 2 * H_p - apply(part, 2, mean, na.rm = TRUE)
-          stat_p <- abs(H_bc_p)/sig_p
-          # first hypothesis.
-          j_pvals_p <- sapply(stat_p, epvals, zs = tilde)
-          # Not bias-corrected joint p-values
-          stat_un_p <- abs(H_p)/sig_p
-          j_pvals_un_p <- sapply(stat_un_p, epvals, zs = tilde)
+      # first tease out characteristics that are not factors
+      noncat <- vars[-match(cat, vars)]
+      # for noncat subset pointwise p-values from previous results
+      if (dim(cl)[2] == 1) {
+        noncat_p <- pw_p[, noncat]
+        noncat_p_bc <- pw_p_bc[, noncat]
+      } else if (dim(cl)[2] == 2) {
+        pw_p_most <- matrix(pw_p[, 1:length(varname)], nrow = 1)
+        pw_p_least <- matrix(pw_p[, -(1:length(varname))], nrow = 1)
+        colnames(pw_p_most) <- colnames(pw_p_least) <- varname
+        noncat_p_most <- pw_p_most[, noncat]
+        noncat_p_least <- pw_p_least[, noncat]
+        pw_p_most_bc <- matrix(pw_p_bc[, 1:length(varname)], nrow = 1)
+        pw_p_least_bc <- matrix(pw_p_bc[, -(1:length(varname))], nrow = 1)
+        colnames(pw_p_most_bc) <- colnames(pw_p_least_bc) <- varname
+        noncat_p_most_bc <- pw_p_most_bc[, noncat]
+        noncat_p_least_bc <- pw_p_least_bc[, noncat]
+      }
+      # now we calculate joint p-values within each factor category
+      # for each factor, get the dummy names, subset from the bootstrap matrix
+      # and conduct inference
+      newfunc <- function(x, bootstrap_mat, H, b, cl, varname) {
+        # get the dummy name for each factor
+        name <- colnames(subsetting(data, x))
+        if (dim(cl)[2] == 1) {
+          # get bootstrap matrix and estimates within each category
+          boot_mat <- bootstrap_mat[, name]
+          H_mat <- H[, name]
+        } else if (dim(cl)[2] == 2) {
+          # subset only gets the first group, need to split the matrix
+          # and get the second group, too
+          most <- bootstrap_mat[, 1:length(varname)]
+          least <- bootstrap_mat[, -(1:length(varname))]
+          most_H <- matrix(H[1:length(varname)], nrow = 1)
+          least_H <- matrix(H[-(1:length(varname))], nrow = 1)
+          colnames(most_H) <- colnames(least_H) <- varname
+          mat_most <- most[, name]
+          mat_least <- least[, name]
+          H_most <- most_H[, name]
+          H_least <- least_H[, name]
         }
-        out <- (cbind(j_pvals_p, j_pvals_un_p))
+        # conduct inference
+        inference <- function(h, bt, rownum) {
+          Zc <- bt - matrix(h, nrow = rownum, ncol = length(h), byrow = TRUE)
+          sig <- (apply(Zc, 2, quantile, 0.75, na.rm = TRUE) -
+                    apply(Zc, 2, quantile, 0.25, na.rm = TRUE)) / (qnorm(0.75) - qnorm(0.25))
+          t_tilde <- apply(abs(Zc)/matrix(sig, nrow = b, ncol = length(sig),
+                                          byrow = TRUE), 1, max, na.rm = TRUE)
+          H_bc <- 2 * h - apply(bt, 2, mean, na.rm = TRUE)
+          stat <- abs(H_bc)/sig
+          # bias corrected categorical pvalues
+          cat_pvals <- sapply(stat, epvals, zs = t_tilde)
+          stat_un <- abs(h)/sig
+          # non bias corrected categorical pvalues
+          cat_pvals_un <- sapply(stat_un, epvals, zs = t_tilde)
+          out <- cbind(cat_pvals, cat_pvals_un)
+        }
+        if (dim(cl)[2] == 1) {
+          pvalues <- inference(h = H_mat, bt = boot_mat, rownum = b)
+        } else if (dim(cl)[2] == 2) {
+          pvalues_most <- inference(h = H_most, bt = mat_most, rownum = b)
+          pvalues_least <- inference(h = H_least, bt = mat_least, rownum = b)
+          pvalues <- cbind(pvalues_most, pvalues_least)
+        }
+        return(pvalues)
       }
+      result <- sapply(cat, newfunc, bootstrap_mat = draws_H, H = H, b = b,
+                       cl = cl, varname = varname)
+      # Now we tabulate the results
       # placeholder
-      mat <- matrix(0, nrow = 1, ncol = 2)
-      if (dim(cl)[2] == 2) {
-        catp_least <- lapply(cat, cate, Zc = Zc[, 1:length(t)],
-                             H = matrix(H[, 1:length(t)], nrow = 1))
-        catp_most <- lapply(cat, cate, Zc = Zc[, -(1:length(t))],
-                            H = matrix(H[, -(1:length(t))], nrow = 1))
-        # Now we get the output
-        for (i in 1:length(catp_least)) mat <- rbind(mat,
-                                                     unlist(catp_least[[i]]))
+      if (dim(cl)[2] == 1) {
+        mat <- matrix(0, nrow = 1, ncol = 2)
+        for (i in 1:length(result)) mat <- rbind(mat, unlist(result[[i]]))
+        # the first column is cat pvalues; second column is not bias corrected
         mat <- mat[-1, ]
-        for (i in 1:length(catp_most)) mat <- rbind(mat,
-                                                    unlist(catp_most[[i]]))
-      } else {
-        catp_list <- lapply(cat, cate, Zc = Zc, H = H)
-        # Now we get the output
-        for (i in 1:length(catp_list)) mat <- rbind(mat,
-                                                    unlist(catp_list[[i]]))
+        # combine with previous noncat pvalues
+        mat <- rbind(cbind(noncat_p_bc, noncat_p), mat)
+        # mat might have different orders from est, bse, so need to reorder and
+        # match.
+        # the order of variables in mat should line up with that in varname
+        rightorder <- match(varname, rownames(mat))
+        mat <- mat[rightorder, ]
+        p_cat_bc <- mat[, 1]
+        p_cat_un <- mat[, 2]
+      } else if (dim(cl)[2] == 2) {
+        mat <- matrix(0, nrow = 1, ncol = 4)
+        for (i in 1:length(result)) mat <- rbind(mat, unlist(result[[i]]))
+        # first two columns for most affected, last two for the least
         mat <- mat[-1, ]
+        # combine with previous noncat pvalues
+        noncategory <- cbind(noncat_p_most_bc, noncat_p_least_bc,
+                             noncat_p_most, noncat_p_least)
+        mat <- rbind(noncategory, mat)
+        # reorder
+        rightorder <- match(varname, rownames(mat))
+        mat <- mat[rightorder, ]
+        p_cat_bc <- mat[, 1:2]
+        p_cat_un <- mat[, 3:4]
       }
-      p_cat_bc <- mat[, 1]
-      p_cat_un <- mat[, 2]
       if (bc == TRUE) {
         output <- list(est = H_bc, bse = sig, joint_p = j_pvals,
-                       p_cat = p_cat_bc, vars = vars, type = temp)
+                       p_cat = p_cat_bc, vars = varname, type = temp)
       } else {
         output <- list(est = H, bse = sig, joint_p = j_pvals_un,
-                       p_cat = p_cat_un, vars = vars, type = temp)
+                       p_cat = p_cat_un, vars = varname, type = temp)
       }
     } else {# if cat is null
       if (bc == TRUE) {
         output <- list(est = H_bc, bse = sig, joint_p = j_pvals,
-                       pointwise_p = pw_p_bc, vars = vars, type = temp)
+                       pointwise_p = pw_p_bc, vars = varname, type = temp)
       } else {
         output <- list(est = H, bse = sig, joint_p = j_pvals_un,
-                       pointwise_p = pw_p, vars = vars, type = temp)
+                       pointwise_p = pw_p, vars = varname, type = temp)
       }
     }
     # claim the object to be class "ca"
-    output <- structure(output, class = "camoment")
+    output <- structure(output, class = "ca")
     return(output)
   } else if (interest == "dist") {
     draws_H <- result_boot$t # nrow is B
@@ -765,10 +938,11 @@ ca <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
       output <- list(infresults = infresults_n, sortvar = temp0, alpha = alpha)
     }
     # claim the output as an object of class "cadist" so as to use S3
-    output <- structure(output, class = "cadist")
+    output <- structure(output, class = "ca")
     return(output)
   }
 }
+
 # ------ Two Auxiliary Functions
 # 1. Function to obtain empirical p-values
 epvals <- function(z, zs){
@@ -787,29 +961,39 @@ wcdf <- function(y, x, w){
 #' @param object   Output of \code{\link{ca}} command with
 #'                 \code{interest = "moments"}.
 #' @param ...      additional arguments affecting the summary produced.
+#' @examples
+#' data("mortgage")
+#' ### Regression Specification
+#' fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec +
+#' ltv_med + ltv_high + denpmi + selfemp + single + hischl
+#' ### Specify characteristics of interest
+#' t <- c("deny", "p_irat", "black", "hse_inc", "ccred", "mcred", "pubrec",
+#' "denpmi", "selfemp", "single", "hischl", "ltv_med", "ltv_high")
+#' ### Issue ca command
+#' CA <- ca(fm = fm, data = mortgage, var = "black", method = "logit",
+#' cl = "both", t = t, b = 50, bc = TRUE)
+#' ### Report summary table
+#' summary(CA)
 #' @export
-summary.camoment <- function(object, ...) {
+summary.ca <- function(object, ...) {
   type <- object$type
   n_col <- length(object$est)/length(object$vars)
   est <- matrix(object$est, ncol = n_col)
   se <- matrix(object$bse, ncol = n_col)
   joint_p <- matrix(object$joint_p, ncol = n_col)
   if (type == "both") {
-    table <- matrix(0, ncol = 6, nrow = length(object$vars))
+    table <- matrix(0, ncol = 4, nrow = length(object$vars))
     # Least Affected Bias-corrected estimate
     table[, 1] <- est[, 1]
     # Corresponding SE
     table[, 2] <- se[, 1]
-    # joint_p
-    table[, 3] <- joint_p[, 1]
     # Most affected
-    table[, 4] <- est[, 2]
+    table[, 3] <- est[, 2]
     # Corresponding SE
-    table[, 5] <- se[, 2]
-    table[, 6] <- joint_p[, 2]
+    table[, 4] <- se[, 2]
     # assign names to each row
     rownames(table) <- colnames(object$est)[1:length(object$vars)]
-    colnames(table) <- c("Least", "SE", "JP-vals", "Most", "SE", "JP-vals")
+    colnames(table) <- c("Most", "SE", "Least", "SE")
   } else {
     table <- matrix(0, ncol = 3, nrow = length(object$vars))
     table[, 1] <- est
@@ -824,16 +1008,7 @@ summary.camoment <- function(object, ...) {
   } else if (!is.null(object$pointwise_p)) {
     new_p <- matrix(object$pointwise_p, ncol = n_col)
   }
-  if (type == "both") {
-    temp <- matrix(0, ncol = 2, nrow = length(object$vars))
-    temp[, 1] <- new_p[, 1]
-    temp[, 2] <- new_p[, 2]
-    if (!is.null(object$p_cat)) colnames(temp) <- rep("Cat P-vals", 2)
-    if (is.null(object$p_cat)) colnames(temp) <- rep("PW P-vals", 2)
-    table <- cbind(table, temp)
-    # reorder
-    table <- table[, c(1, 2, 3, 7, 4, 5, 6, 8)]
-  } else {
+  if (type == "diff") {
     temp <- matrix(new_p, ncol = 1, nrow = length(object$vars))
     if (!is.null(object$p_cat)) colnames(temp) <- "Cat P-vals"
     if (is.null(object$p_cat)) colnames(temp) <- "PW P-vals"
@@ -861,17 +1036,22 @@ summary.camoment <- function(object, ...) {
 #'
 #' @examples
 #' data("mortgage")
-#' fm <- deny ~ black + p_irat
-#' t <- c(rep(1, 2), rep(0, 14)) # Specify variables in interest
-#' # Drawing Distributions
-#' CAgraph <- ca(fm=fm, data = mortgage, var = "black", method = "logit",
-#'               t = t, interest = "dist")
-#' plot(x = CAgraph, var = "p_irat")
+#' ### Regression Specification
+#' fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec +
+#' ltv_med + ltv_high + denpmi + selfemp + single + hischl
+#' ### Specify characteristics of interest for plotting
+#' t2 <- "p_irat"
+#' ### issue ca command
+#' CAdist <- ca(fm = fm, data = mortgage, var = "black", method = "logit",
+#' t = "p_irat", b = 50, interest = "dist")
+#' ### plotting
+#' plot(CAdist, var = "p_irat", ylab = "Prob",
+#' xlab = "Monthly Debt-to-Income Ratio", sub = "logit model")
 #'
 #' @importFrom graphics axis legend lines plot polygon
 #' @export
-plot.cadist <- function(x, var, main = NULL, sub = NULL, xlab = NULL,
-                        ylab = NULL, ...) {
+plot.ca <- function(x, var, main = NULL, sub = NULL, xlab = NULL,
+                    ylab = NULL, ...) {
   alpha = x$alpha
   if (is.na(match(var, names(x$sortvar)))) {
     stop("The variable must be consistent with interest specification in the ca

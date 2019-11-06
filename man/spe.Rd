@@ -7,7 +7,7 @@
 spe(fm, data, method = c("ols", "logit", "probit", "QR"),
   var_type = c("binary", "continuous", "categorical"), var, compare,
   subgroup = NULL, samp_weight = NULL, us = c(1:9)/10, alpha = 0.1,
-  taus = c(1:9)/10, b = 500, parallel = c("no", "yes"),
+  taus = c(5:95)/100, b = 500, parallel = FALSE,
   ncores = detectCores(), seed = 1, bc = TRUE,
   boot_type = c("nonpar", "weighted"))
 }
@@ -54,13 +54,13 @@ values between 0 and 1. Default is \code{c(1:9)/10}.}
 Default is 0.1}
 
 \item{taus}{Indexes for quantile regression. Default is
-\code{c(1:9)/10}.}
+\code{c(5:95)/100}.}
 
 \item{b}{Number of bootstrap draws. Default is set to be 500.}
 
 \item{parallel}{Whether the user wants to use parallel computation.
-The default is \code{no} and only 1 CPU will be used.
-The other option is \code{yes}, and user can specify
+The default is \code{FALSE} and only 1 CPU will be used.
+The other option is \code{TRUE}, and user can specify
 the number of CPUs in the \code{ncores} option.}
 
 \item{ncores}{Number of cores for computation. Default is set to be
@@ -101,6 +101,6 @@ fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec + ltv_med +
 ltv_high + denpmi + selfemp + single + hischl
 
 test <- spe(fm = fm, data = mortgage, var = "black", method = "logit",
-us = c(1:9)/10, b=100)
+us = c(2:98)/100, b = 50)
 
 }

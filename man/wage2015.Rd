@@ -14,38 +14,26 @@ analysis; individuals with hourly wage rate below $3. Contains 32,523
 workers including 18,137 men and 14,382 women. The file contains the
 following variables:
 \describe{
-\item{wage}{hourly wages}
 \item{lnw}{log of hourly wages}
-\item{widowed}{marital status indicator: widowed}
-\item{divorced}{marital status indicator: divorced}
-\item{separated}{marital status indicator: separatd}
-\item{nevermarried}{marital status indicator: nevermarried}
-\item{married}{marital status indicator: married}
 \item{weight}{CPS sampling weight}
 \item{female}{gender indicator: 1 if female}
-\item{lhs}{education attainment indicator: less than high school graduate:
-years of educ < 12}
-\item{hsg}{education attainment indicator:high school graduate: years of
-educ = 12}
-\item{sc}{education attainment indicator: some college: 13<=years of
-educ<=15}
-\item{cg}{education attainment indicator: college: 16<=years of educ<=17}
-\item{ad}{education attainment indicator: advanced degree: years of
-educ>=18}
-\item{mw}{region indicator: midwest}
-\item{so}{region indicator: south}
-\item{we}{region indicator: west}
-\item{me}{region indicator: northeast}
 \item{exp1}{max(age-years of educ-7, 0)}
 \item{exp2}{exp1^2/100}
 \item{exp3}{exp1^3/100}
 \item{exp4}{exp1^4/100}
-\item{occ}{Occupation Categories in CPS: 456 categories}
-\item{occ2}{Aggregated occupation: 6 categories, 5 categories without armed
-forces}
-\item{ind}{Industry Categories in CPS: 257 categories}
-\item{ind2}{Aggregated Industry: 14 categories, 12 without agriculture and
-military}
+\item{occ}{Aggregated occupation with 5 categories: managers, service,
+sales, construction and production.}
+\item{ind}{Aggregated industry with 12 categories: minery, construction,
+manufacture, retail, transport, information, finance, professional,
+education, leisure, services, public.}
+\item{educ}{Education attainment with 5 categories: lhs (less than high
+school graduate, years of educ < 12), hsg (high school graduate: years of
+educ = 12), sc (some college: 13<=years of educ<=15), cg (college:
+16<=years of educ<=17), ad (advanced degree: years of educ>=18).}
+\item{ms}{Marital Status with 5 categories: married, widowed, separated,
+divorced, and nevermarried.}
+\item{region}{Regions with 4 categories: mw (midwest), so (south),
+we (west), ne (northeast).}
 }}
 \source{
 U.S. March Supplement of the Current Population Survey (CPS) in 2015.

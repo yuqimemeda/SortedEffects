@@ -45,11 +45,11 @@
 #' @param alpha       Size for confidence interval. Shoule be between 0 and 1.
 #'                    Default is 0.1
 #' @param taus        Indexes for quantile regression. Default is
-#'                    \code{c(1:9)/10}.
+#'                    \code{c(5:95)/100}.
 #' @param b           Number of bootstrap draws. Default is set to be 500.
 #' @param parallel    Whether the user wants to use parallel computation.
-#'                    The default is \code{no} and only 1 CPU will be used.
-#'                    The other option is \code{yes}, and user can specify
+#'                    The default is \code{FALSE} and only 1 CPU will be used.
+#'                    The other option is \code{TRUE}, and user can specify
 #'                    the number of CPUs in the \code{ncores} option.
 #' @param ncores      Number of cores for computation. Default is set to be
 #'                    \code{detectCores()}, which is a function from package
@@ -70,7 +70,7 @@
 #' ltv_high + denpmi + selfemp + single + hischl
 #'
 #' test <- spe(fm = fm, data = mortgage, var = "black", method = "logit",
-#' us = c(1:9)/10, b=100)
+#' us = c(2:98)/100, b = 50)
 #'
 #' @importFrom Hmisc wtd.quantile
 #' @importFrom boot boot
@@ -81,7 +81,7 @@
 spe <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
                 var_type = c("binary", "continuous", "categorical"), var,
                 compare, subgroup = NULL, samp_weight = NULL, us = c(1:9)/10,
-                alpha = 0.1, taus = c(1:9)/10, b = 500, parallel = c("no", "yes"),
+                alpha = 0.1, taus = c(5:95)/100, b = 500, parallel = FALSE,
                 ncores = detectCores(), seed = 1, bc = TRUE,
                 boot_type = c("nonpar", "weighted")) {
   # ----- Stopping Condition
@@ -93,7 +93,6 @@ spe <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
   method <- match.arg(method)
   var_type <- match.arg(var_type)
   boot_type <- match.arg(boot_type)
-  parallel <- match.arg(parallel)
   # ----- 1. Call to estimate PE
   output <- suppressWarnings(peestimate(fm, data, samp_weight, var_type, var, compare, method,
                        subgroup, taus))
@@ -196,7 +195,7 @@ spe <- function(fm, data, method = c("ols", "logit", "probit", "QR"),
   }
   # Use boot command
   set.seed(seed)
-  if (parallel == "no") ncores <- 1
+  if (parallel == FALSE) ncores <- 1
   if (boot_type == "nonpar") {
     if (method != "QR") {
       # print a message showing how many cores are used
@@ -337,7 +336,7 @@ ape <- function(bs, est, alpha) {
 #' fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec + ltv_med +
 #' ltv_high + denpmi + selfemp + single + hischl
 #' test <- spe(fm = fm, data = mortgage, var = "black", method = "logit",
-#' us = c(1:9)/10)
+#' us = c(2:98)/100, b = 50)
 #'
 #' plot(x = test, main="APE and SPE of Being Black on the prob of
 #' Mortgage Denial", sub="Logit Model", ylab="Change in Probability")
@@ -383,6 +382,13 @@ plot.spe <- function(x, ylim = NULL, main = NULL, sub = NULL,
 #'                 estimates. Default is \code{sorted}, which shows the
 #'                 sorted estimates.
 #' @param ...      additional arguments affecting the summary produced.
+#' @examples
+#' data("mortgage")
+#' fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec + ltv_med +
+#' ltv_high + denpmi + selfemp + single + hischl
+#' test <- spe(fm = fm, data = mortgage, var = "black", method = "logit",
+#' us = c(2:98)/100, b = 50)
+#' summary(test)
 #' @export
 summary.spe <- function(object, result = c("sorted", "average"), ...) {
   spe <- object$spe

@@ -22,3 +22,11 @@ quantile indices, sorted estimates, standard errors, point-wise confidence
 intervals, and uniform confidence intervals. For average estimates, the
 table shows average estiamtes, standard errors, and confidence intervals.
 }
+\examples{
+data("mortgage")
+fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec + ltv_med +
+ltv_high + denpmi + selfemp + single + hischl
+test <- spe(fm = fm, data = mortgage, var = "black", method = "logit",
+us = c(2:98)/100, b = 50)
+summary(test)
+}

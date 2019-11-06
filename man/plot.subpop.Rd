@@ -4,8 +4,9 @@
 \alias{plot.subpop}
 \title{Plot 2-dimensional projections of variables in interest.}
 \usage{
-\method{plot}{subpop}(x, varx, vary, main = NULL, sub = NULL,
-  xlab = NULL, ylab = NULL, ...)
+\method{plot}{subpop}(x, varx, vary, xlim = NULL, ylim = NULL,
+  main = NULL, sub = NULL, xlab = NULL, ylab = NULL,
+  overlap = FALSE, ...)
 }
 \arguments{
 \item{x}{Output of \code{\link{subpop}} command.}
@@ -15,6 +16,13 @@
 \item{vary}{The name of the variable name to be plotted on the
 y-axis.}
 
+\item{xlim}{The range of x-axis. Default is \code{NULL}.}
+
+\item{ylim}{The range of y-axis. Default is \code{NULL}. If the
+variable on the y-coordinate is a factor, the default
+will set it to be the factor level, and users don't
+need to specify \code{ylim}.}
+
 \item{main}{Main title of the plot. Default is \code{NULL}.}
 
 \item{sub}{Sub title of the plot. Default is NULL.}
@@ -23,6 +31,10 @@ y-axis.}
 
 \item{ylab}{y-axis label. Default is \code{NULL}.}
 
+\item{overlap}{Whether user wants to allow observations included in both
+confidence sets. Default is \code{FALSE}, and the plot
+drops the overlapped observations.}
+
 \item{...}{Graphics parameters to be passed to the plotting
 routines.}
 }
@@ -30,15 +42,21 @@ routines.}
 Takes output from \code{\link{subpop}} command as inputs and plots
 2-dimensional projection plots of two specified variables. If a
 variable in interest is of type factor, then the user must put it on
-the y-axis.The range of x-axis is set to be the range of variable on the
-x-coordinate. If the variable on the y-coordinate is a factor, range of
-y-axis is set to be the factor level; otherwise it is set to be the range of
-the variable.
+the y-axis. If the variable on the y-coordinate is a factor, range of
+y-axis is set to be the factor level. Otherwise, users can use
+\code{\link{summary.subpop}} to know the ranges of variables in the
+two groups.
 }
 \examples{
 data("mortgage")
-fm <- deny ~ black + p_irat + hse_inc
-result <- subpop(fm = fm, data = mortgage, var = "black", method = "logit")
-plot(x = result, varx = mortgage$p_irat, vary = mortgage$ccred)
-
+### Regression Specification
+fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec +
+   ltv_med + ltv_high + denpmi + selfemp + single + hischl
+### Issue the subpop command
+set_b <- subpop(fm, data = mortgage, method = "logit", var = "black",
+u = 0.1, alpha = 0.1, b = 50)
+### Plotting
+plot(set_b, varx = mortgage$p_irat, vary = mortgage$hse_inc,
+     xlim = c(0, 1.5), ylim = c(0, 1.5), xlab = "Debt/Income",
+     ylab = "Housing expenses/Income", overlap = TRUE)
 }

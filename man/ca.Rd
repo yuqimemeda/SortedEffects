@@ -6,12 +6,11 @@
 \usage{
 ca(fm, data, method = c("ols", "logit", "probit", "QR"),
   var_type = c("binary", "continuous", "categorical"), var, compare,
-  subgroup = NULL, samp_weight = NULL, taus = c(1:9)/10, u = 0.1,
+  subgroup = NULL, samp_weight = NULL, taus = c(5:95)/100, u = 0.1,
   interest = c("moment", "dist"), t = c(1, 1, rep(0, dim(data)[2] -
   2)), cl = c("both", "diff"), cat = NULL, alpha = 0.1, b = 500,
-  parallel = c("no", "yes"), ncores = detectCores(), seed = 1,
-  bc = TRUE, range_cb = c(0.5:99.5)/100, boot_type = c("nonpar",
-  "weighted"))
+  parallel = FALSE, ncores = detectCores(), seed = 1, bc = TRUE,
+  range_cb = c(1:99)/100, boot_type = c("nonpar", "weighted"))
 }
 \arguments{
 \item{fm}{Regression formula}
@@ -50,7 +49,7 @@ then users should specify
 where n denotes sample size. Default is \code{NULL}.}
 
 \item{taus}{Indexes for quantile regression. Default is
-\code{c(1:9)/10}.}
+\code{c(5:95)/100}.}
 
 \item{u}{Percentile of most and least affected. Default is set to
 be 0.1.}
@@ -76,7 +75,7 @@ option) of the most and least affected groups. The
 default is \code{"both"}, which shows the variables of
 the two groups; the alternative is \code{"diff"}, which
 shows the difference of the two groups. The user can
-use the \code{\link{summary.camoment}} to tabulate the
+use the \code{\link{summary.ca}} to tabulate the
 results, which also contain the standard errors and p-
 values. If \code{interest = "dist"}, this option doesn't
 have any bearing and user can leave it to be the default
@@ -85,13 +84,12 @@ value.}
 \item{cat}{P-values in classification analysis are adjusted for
 multiplicity to account for joint testing of zero
 coefficients on for all variables within a category.
-Specify all variables in interest in a list using numbers
-to denote relative positions. For example, if variables
-in interest are "educ", "male", "female", "low income",
-"middle income", and "high income", cat should be
-specified as \code{cat = list(a="educ", b=c("male",
-"female"), c=c("low income", "middle income",
-"high income"))}. Default is \code{NULL}.}
+Suppose we have selected specified 3 variables in
+interest: \code{t = c("a", "b", "c")}. Without loss of
+generality, assume \code{"a"} is not a factor, while
+\code{"b"} and \code{"c"} are two factors. Then users
+need to specify as \code{cat = c("b", "c")}. Default is
+\code{NULL}.}
 
 \item{alpha}{Size for confidence interval. Shoule be between 0 and 1.
 Default is 0.1}
@@ -99,8 +97,8 @@ Default is 0.1}
 \item{b}{Number of bootstrap draws. Default is 500.}
 
 \item{parallel}{Whether the user wants to use parallel computation.
-The default is \code{no} and only 1 CPU will be used.
-The other option is \code{yes}, and user can specify
+The default is \code{FALSE} and only 1 CPU will be used.
+The other option is \code{TRUE}, and user can specify
 the number of CPUs in the \code{ncores} option.}
 
 \item{ncores}{Number of cores for computation. Default is set to be
@@ -121,10 +119,7 @@ dataset there can be memory problem storing very many of
 observations, and thus users can provide a Sort value and
 the package will sort and unique based on the weighted
 quantile of Sort. If users don't want this feature, set
-\code{range_cb = NULL}. Default is
-\code{c(0.5:99.5)/100}. To see how \code{range_cb} makes
-a difference in the plot, refer to the examples in the
-companion vignette.}
+\code{range_cb = NULL}. Default is \code{c(1:99)/100}.}
 
 \item{boot_type}{Type of bootstrap. Default is \code{"nonpar"}, and the
 package implements nonparametric bootstrap. The
@@ -140,13 +135,14 @@ showing
   \item \code{bse} Bootstrap standard errors.
   \item \code{joint_p} P-values that are adjusted for multiplicity to
   account for joint testing for all variables.
+  \item \code{pointwise_p} P-values that doesn't adjust for join testing
 }
 If users have further specified \code{cat} (e.g., \code{!is.null(cat)}), the
-output has a fourth component
-\itemize{
-  \item \code{p_cat} P-values that are adjusted for multiplicity to account
-  for joint testing for all variables within a category.
-}
+fourth component will be replaced with \code{p_cat}: P-values that are a
+djusted for multiplicity to account for joint testing for all variables
+within a category. Users can use \code{\link{summary.ca}} to tabulate the
+results.
+
 When \code{interest = "dist"}, the output is a list of two components:
 \itemize{
   \item \code{infresults} A list that stores estimates, upper and lower
@@ -155,23 +151,29 @@ When \code{interest = "dist"}, the output is a list of two components:
   \item \code{sortvar} A list that stores sorted and unique variables in
   interest.
 }
-We recommend using \code{\link{plot}} command for result visualization.
+We recommend using \code{\link{plot.ca}} command for result visualization.
 }
 \description{
 \code{ca} conducts CA estimation and inference on user-specified objects of
 interest: first (weighted) moment or (weighted) distribution. Users can use
 \code{t} to specify variables in interest. When object of interest is
-moment, use \code{cl} to specify linear combinations for hypothesis testing.
+moment, use \code{cl} to specify whether want to see averages or difference
+of the two groups.
+}
+\details{
 All estimates are bias-corrected and all confidence bands are monotonized.
 The bootstrap procedures follow algorithm 2.2 as in Chernozhukov,
 Fernandez-Val and Luo (2018).
 }
 \examples{
 data("mortgage")
-fm <- deny ~ black + p_irat
-t <- c(rep(1, 2), rep(0, 14)) # Specify variables in interest
-CA <- ca(fm = fm, data = mortgage, var = "black", method = "logit", b=10,
-t = t)
-
-
+### Regression Specification
+fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec +
+ltv_med + ltv_high + denpmi + selfemp + single + hischl
+### Specify characteristics of interest
+t <- c("deny", "p_irat", "black", "hse_inc", "ccred", "mcred", "pubrec",
+"denpmi", "selfemp", "single", "hischl", "ltv_med", "ltv_high")
+### issue ca command
+CA <- ca(fm = fm, data = mortgage, var = "black", method = "logit",
+cl = "diff", t = t, b = 50, bc = TRUE)
 }

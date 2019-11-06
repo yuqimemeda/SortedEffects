@@ -33,7 +33,7 @@ data("mortgage")
 fm <- deny ~ black + p_irat + hse_inc + ccred + mcred + pubrec + ltv_med +
 ltv_high + denpmi + selfemp + single + hischl
 test <- spe(fm = fm, data = mortgage, var = "black", method = "logit",
-us = c(1:9)/10)
+us = c(2:98)/100, b = 50)
 
 plot(x = test, main="APE and SPE of Being Black on the prob of
 Mortgage Denial", sub="Logit Model", ylab="Change in Probability")
